@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Float
 import os
 from flask_marshmallow import Marshmallow
-from flask_jwt_extended import JWTManager, create_access_token
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from flask_mail import Mail, Message
 
 # app config
@@ -11,13 +11,12 @@ app = Flask(__name__)
 baseDir = os.path.abspath(os.path.dirname(__file__))  # get current dir
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(baseDir, 'planets.db')
 app.config['JWT_SECRET_KEY'] = 'super-secret'  # change it
-app.config['MAIL_SERVER']='smtp.mailtrap.io'
+app.config['MAIL_SERVER'] = 'smtp.mailtrap.io'
 app.config['MAIL_PORT'] = 2525
 app.config['MAIL_USERNAME'] = '4d59d8ed30eaed'
 app.config['MAIL_PASSWORD'] = '87c6e3c2eb9b32'
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
-
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
@@ -151,13 +150,79 @@ def login():
 def retrieve_password(email: str):
     user = User.query.filter_by(email=email).first()
     if user:
-        msg = Message("Your planetary api password is "+user.password,
+        msg = Message("Your planetary api password is " + user.password,
                       sender="admin@planteryapi.com",
                       recipients=[email])
         mail.send(msg)
-        return jsonify(message="Password send to "+email)
+        return jsonify(message="Password send to " + email)
     else:
         return jsonify(message="That email doesn't exit"), 401
+
+
+@app.route("/planet_detail/<int:planet_id>", methods=['GET'])
+def planet_detail(planet_id: int):
+    planet = Planet.query.filter_by(planet_id=planet_id).first()
+    if planet:
+        result = planet_schema.dump(planet)
+        return jsonify(result)
+    else:
+        return jsonify(message="The planet doesn't exit"), 404
+
+
+@app.route("/add_planet", methods=['POST'])
+@jwt_required()
+def add_planet():
+    planet_name = request.form['planet_name'].strip()
+    check_planet = Planet.query.filter_by(planet_name=planet_name).first()
+    if check_planet:
+        return jsonify(message='The planet is already exit'), 409
+    else:
+        planet_type = request.form['planet_type']
+        home_star = request.form['home_star']
+        mass = float(request.form['mass'])
+        radius = float(request.form['radius'])
+        distance = float(request.form['distance'])
+
+        new_planet = Planet(planet_name=planet_name, planet_type=planet_type,
+                            home_star=home_star, mass=mass, radius=radius,
+                            distance=distance)
+
+        db.session.add(new_planet)
+        db.session.commit()
+
+        return jsonify(message="The new planet has been added"), 201
+
+
+@app.route("/update_planet", methods=['PUT'])
+@jwt_required()
+def update_planet():
+    planet_id = int(request.form['planet_id'])
+    planet = Planet.query.filter_by(planet_id=planet_id).first()
+    if planet:
+        planet.planet_type = request.form['planet_type'].strip()
+        planet.planet_name = request.form['planet_name'].strip()
+        planet.home_star = request.form['home_star'].strip()
+        planet.distance = float(request.form['distance'].strip())
+        planet.mass = float(request.form['mass'].strip())
+        planet.radius = float(request.form['radius'].strip())
+
+        db.session.commit()
+        return jsonify(message="The update is success"), 202
+    else:
+        return jsonify(message="The planet doesn't exit"), 404
+
+
+@app.route('/remove_planet/<int:planet_id>', methods=['DELETE'])
+@jwt_required()
+def remove_planet(planet_id: int):
+    planet = Planet.query.filter_by(planet_id=planet_id).first()
+    if planet:
+        db.session.delete(planet)
+        db.session.commit()
+
+        return jsonify(message='Your planet is deleted'), 202
+    else:
+        return jsonify(message="Your planet doesn't exist"), 404
 
 
 # database model
@@ -197,7 +262,6 @@ class PlanetSchema(ma.Schema):
 
 planet_schema = PlanetSchema()
 planets_schema = PlanetSchema(many=True)
-
 
 if __name__ == '__main__':
     app.run()

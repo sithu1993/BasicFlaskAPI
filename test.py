@@ -1,13 +1,9 @@
-
 def maskify(cc):
-    convertData = list(cc[-4:])
-    for x in range(len(convertData)):
-        convertData[x] = ["#"]
-    result = convertData + list(cc[:-4])
-    return ''.join(result)
-
-
-
+    convert_data = list(cc[:-4])
+    for x in range(len(convert_data)):
+        convert_data[x] = "#"
+    maskify_list = ''.join(convert_data + list(cc[-4:]))
+    return maskify_list
 
 
 maskify("342534657689780")
